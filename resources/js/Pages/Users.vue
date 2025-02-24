@@ -198,6 +198,10 @@
                 {{ editingUser ? 'Edit User' : 'New User' }}
               </DialogTitle>
 
+              <div v-if="errorMessage" class="mt-2 text-sm text-red-600">
+                {{ errorMessage }}
+              </div>
+
               <div class="mt-6 space-y-6">
                 <div>
                   <label for="name" class="block text-sm font-medium text-gray-700">Name</label>
@@ -205,8 +209,16 @@
                     type="text"
                     id="name"
                     v-model="form.name"
-                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
+                    :class="[
+                      'mt-1 block w-full rounded-md shadow-sm sm:text-sm',
+                      form.errors.name 
+                        ? 'border-red-300 focus:border-red-500 focus:ring-red-500'
+                        : 'border-gray-300 focus:border-primary-500 focus:ring-primary-500'
+                    ]"
                   />
+                  <p v-if="form.errors.name" class="mt-1 text-sm text-red-600">
+                    {{ form.errors.name[0] }}
+                  </p>
                 </div>
 
                 <div>
@@ -215,8 +227,16 @@
                     type="email"
                     id="email"
                     v-model="form.email"
-                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
+                    :class="[
+                      'mt-1 block w-full rounded-md shadow-sm sm:text-sm',
+                      form.errors.email 
+                        ? 'border-red-300 focus:border-red-500 focus:ring-red-500'
+                        : 'border-gray-300 focus:border-primary-500 focus:ring-primary-500'
+                    ]"
                   />
+                  <p v-if="form.errors.email" class="mt-1 text-sm text-red-600">
+                    {{ form.errors.email[0] }}
+                  </p>
                 </div>
 
                 <div>
@@ -228,8 +248,16 @@
                     id="password"
                     v-model="form.password"
                     :required="!editingUser"
-                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
+                    :class="[
+                      'mt-1 block w-full rounded-md shadow-sm sm:text-sm',
+                      form.errors.password 
+                        ? 'border-red-300 focus:border-red-500 focus:ring-red-500'
+                        : 'border-gray-300 focus:border-primary-500 focus:ring-primary-500'
+                    ]"
                   />
+                  <p v-if="form.errors.password" class="mt-1 text-sm text-red-600">
+                    {{ form.errors.password[0] }}
+                  </p>
                 </div>
 
                 <div>
@@ -349,6 +377,9 @@ const searchQuery = ref('')
 const filterRole = ref('all')
 const currentUserId = computed(() => usePage().props.auth?.user?.id)
 
+const errors = ref({})
+const errorMessage = ref('')
+
 const form = ref({
   name: '',
   email: '',
@@ -356,6 +387,7 @@ const form = ref({
   billable_rate: null,
   pay_rate: null,
   is_admin: false,
+  errors: {}
 })
 
 const clients = ref([])
@@ -417,7 +449,9 @@ function openCreateModal() {
     billable_rate: null,
     pay_rate: null,
     is_admin: false,
+    errors: {}
   }
+  selectedClients.value = []
   showModal.value = true
 }
 
@@ -430,6 +464,7 @@ function editUser(user) {
     billable_rate: user.billable_rate,
     pay_rate: user.pay_rate,
     is_admin: user.is_admin,
+    errors: {}
   }
   loadUserClients(user.id)
   showModal.value = true
@@ -437,34 +472,49 @@ function editUser(user) {
 
 async function saveUser() {
   try {
-    // Get CSRF cookie first
+    form.value.errors = {}
+    errorMessage.value = ''
+    
     await axios.get('/sanctum/csrf-cookie')
     
     const data = { ...form.value }
+    // Remove errors from data before sending
+    delete data.errors
+    
     if (editingUser.value && !data.password) {
       delete data.password
     }
 
+    let userId;
     if (editingUser.value) {
       await axios.put(`/api/users/${editingUser.value.id}`, data)
-      // Update user's clients
-      await axios.put(`/api/users/${editingUser.value.id}/clients`, {
-        client_ids: selectedClients.value
-      })
+      userId = editingUser.value.id
     } else {
       const response = await axios.post('/api/users', data)
-      // Set user's clients for new user
-      await axios.put(`/api/users/${response.data.id}/clients`, {
-        client_ids: selectedClients.value
-      })
+      userId = response.data.id
     }
+
+    // Only update clients if we have any selected
+    if (selectedClients.value && selectedClients.value.length > 0) {
+      try {
+        await axios.put(`/api/users/${userId}/clients`, {
+          client_ids: selectedClients.value
+        })
+      } catch (clientError) {
+        console.error('Error updating user clients:', clientError)
+        // Don't fail the whole operation if client assignment fails
+      }
+    }
+
     await loadUsers()
     closeModal()
   } catch (error) {
     console.error('Error saving user:', error)
-    if (error.response) {
-      console.error('Error response:', error.response.data)
-      console.error('Error status:', error.response.status)
+    if (error.response?.data?.errors) {
+      form.value.errors = error.response.data.errors
+    }
+    if (error.response?.data?.message) {
+      errorMessage.value = error.response.data.message
     }
   }
 }
@@ -489,6 +539,8 @@ async function deleteUser(user) {
 
 function closeModal() {
   showModal.value = false
+  form.value.errors = {}
+  errorMessage.value = ''
 }
 
 onMounted(() => {
