@@ -12,12 +12,8 @@
             <div class="hidden sm:ml-6 sm:flex sm:space-x-8">
               <Link
                 href="/timer"
-                class="inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium"
-                :class="[
-                  currentPath.startsWith('/timer')
-                    ? 'border-primary-500 text-gray-900'
-                    : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
-                ]"
+                class="flex items-center text-gray-600 hover:text-gray-900 text-sm font-medium"
+                :class="{ 'text-primary-600': $page.url.startsWith('/timer') }"
               >
                 <ClockIcon class="h-5 w-5 mr-1" />
                 Timer
@@ -27,7 +23,7 @@
                 href="/projects"
                 class="inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium"
                 :class="[
-                  currentPath.startsWith('/projects')
+                  $page.url.startsWith('/projects')
                     ? 'border-primary-500 text-gray-900'
                     : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
                 ]"
@@ -40,7 +36,7 @@
                 href="/tags"
                 class="inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium"
                 :class="[
-                  currentPath.startsWith('/tags')
+                  $page.url.startsWith('/tags')
                     ? 'border-primary-500 text-gray-900'
                     : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
                 ]"
@@ -54,7 +50,7 @@
                 href="/clients"
                 class="inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium"
                 :class="[
-                  currentPath.startsWith('/clients')
+                  $page.url.startsWith('/clients')
                     ? 'border-primary-500 text-gray-900'
                     : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
                 ]"
@@ -68,7 +64,7 @@
                 href="/users"
                 class="inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium"
                 :class="[
-                  currentPath.startsWith('/users')
+                  $page.url.startsWith('/users')
                     ? 'border-primary-500 text-gray-900'
                     : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
                 ]"
@@ -82,15 +78,12 @@
           <!-- User Menu -->
           <div v-if="userName" class="flex items-center space-x-4">
             <span class="text-sm font-medium text-gray-900">{{ userName }}</span>
-            <Link
-              href="/logout"
-              method="post"
-              as="button"
-              class="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+            <button
+              class="text-gray-600 hover:text-red-600 px-3 py-1.5 text-sm rounded-md hover:bg-gray-100"
+              @click="logout"
             >
-              <ArrowRightOnRectangleIcon class="h-5 w-5 mr-1" />
               Logout
-            </Link>
+            </button>
           </div>
         </div>
       </div>
@@ -118,7 +111,6 @@ import {
 } from '@heroicons/vue/24/outline'
 
 const page = usePage()
-const currentPath = computed(() => window.location.pathname)
 const userName = computed(() => usePage().props.auth?.user?.name)
 const isAdmin = computed(() => usePage().props.auth?.user?.is_admin)
 
@@ -128,4 +120,8 @@ onMounted(() => {
   console.log('Auth data:', pageProps.auth)
   console.log('User data:', pageProps.auth?.user)
 })
+
+function logout() {
+  // Implement logout functionality
+}
 </script> 

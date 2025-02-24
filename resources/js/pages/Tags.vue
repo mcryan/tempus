@@ -1,113 +1,111 @@
 <template>
   <Head title="Tags" />
-  <AppLayout>
-    <div>
-      <!-- Header Section -->
-      <div class="sm:flex sm:items-center sm:justify-between">
-        <div>
-          <h1 class="text-2xl font-bold text-gray-900">Tags</h1>
-          <p class="mt-2 text-sm text-gray-700">
-            Organize and categorize your time entries with tags.
-          </p>
-        </div>
-        <div class="mt-4 sm:mt-0">
-          <button
-            @click="openCreateModal"
-            class="inline-flex items-center justify-center rounded-md bg-primary-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
-          >
-            <PlusIcon class="h-5 w-5 mr-1.5" />
-            New Tag
-          </button>
+  <div>
+    <!-- Header Section -->
+    <div class="sm:flex sm:items-center sm:justify-between">
+      <div>
+        <h1 class="text-2xl font-bold text-gray-900">Tags</h1>
+        <p class="mt-2 text-sm text-gray-700">
+          Organize and categorize your time entries with tags.
+        </p>
+      </div>
+      <div class="mt-4 sm:mt-0">
+        <button
+          @click="openCreateModal"
+          class="inline-flex items-center justify-center rounded-md bg-primary-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
+        >
+          <PlusIcon class="h-5 w-5 mr-1.5" />
+          New Tag
+        </button>
+      </div>
+    </div>
+
+    <!-- Stats Section -->
+    <dl class="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-2">
+      <div class="overflow-hidden rounded-lg bg-white px-4 py-5 shadow sm:p-6">
+        <dt class="truncate text-sm font-medium text-gray-500">Total Tags</dt>
+        <dd class="mt-1 text-3xl font-semibold tracking-tight text-gray-900">
+          {{ tags.length }}
+        </dd>
+      </div>
+      <div class="overflow-hidden rounded-lg bg-white px-4 py-5 shadow sm:p-6">
+        <dt class="truncate text-sm font-medium text-gray-500">Tagged Time Entries</dt>
+        <dd class="mt-1 text-3xl font-semibold tracking-tight text-gray-900">
+          {{ tags.reduce((sum, tag) => sum + (tag.time_entries?.length || 0), 0) }}
+        </dd>
+      </div>
+    </dl>
+
+    <!-- Search Section -->
+    <div class="mt-8">
+      <div class="relative max-w-lg">
+        <input
+          type="text"
+          v-model="searchQuery"
+          placeholder="Search tags..."
+          class="block w-full rounded-md border-0 py-1.5 pr-10 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-primary-600 sm:text-sm sm:leading-6"
+        />
+        <div class="absolute inset-y-0 right-0 flex py-1.5 pr-1.5">
+          <MagnifyingGlassIcon class="h-5 w-5 text-gray-400" />
         </div>
       </div>
+    </div>
 
-      <!-- Stats Section -->
-      <dl class="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-2">
-        <div class="overflow-hidden rounded-lg bg-white px-4 py-5 shadow sm:p-6">
-          <dt class="truncate text-sm font-medium text-gray-500">Total Tags</dt>
-          <dd class="mt-1 text-3xl font-semibold tracking-tight text-gray-900">
-            {{ tags.length }}
-          </dd>
-        </div>
-        <div class="overflow-hidden rounded-lg bg-white px-4 py-5 shadow sm:p-6">
-          <dt class="truncate text-sm font-medium text-gray-500">Tagged Time Entries</dt>
-          <dd class="mt-1 text-3xl font-semibold tracking-tight text-gray-900">
-            {{ tags.reduce((sum, tag) => sum + (tag.time_entries?.length || 0), 0) }}
-          </dd>
-        </div>
-      </dl>
-
-      <!-- Search Section -->
-      <div class="mt-8">
-        <div class="relative max-w-lg">
-          <input
-            type="text"
-            v-model="searchQuery"
-            placeholder="Search tags..."
-            class="block w-full rounded-md border-0 py-1.5 pr-10 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-primary-600 sm:text-sm sm:leading-6"
-          />
-          <div class="absolute inset-y-0 right-0 flex py-1.5 pr-1.5">
-            <MagnifyingGlassIcon class="h-5 w-5 text-gray-400" />
+    <!-- Tags Grid -->
+    <div class="mt-8">
+      <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div
+          v-for="tag in filteredTags"
+          :key="tag.id"
+          class="relative flex items-center space-x-3 rounded-lg border border-gray-300 bg-white px-6 py-5 shadow-sm hover:border-gray-400"
+        >
+          <div class="flex-shrink-0">
+            <div
+              class="h-8 w-8 rounded-full"
+              :style="{ backgroundColor: tag.color }"
+            ></div>
+          </div>
+          <div class="min-w-0 flex-1">
+            <span class="absolute inset-0" aria-hidden="true" />
+            <p class="text-sm font-medium text-gray-900">{{ tag.name }}</p>
+            <p class="truncate text-sm text-gray-500">
+              {{ tag.time_entries?.length || 0 }} time entries
+            </p>
+          </div>
+          <div class="flex-shrink-0 space-x-2">
+            <button
+              @click.stop="editTag(tag)"
+              class="inline-flex items-center rounded-md bg-white px-2.5 py-1.5 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
+            >
+              <PencilSquareIcon class="h-4 w-4" />
+              <span class="sr-only">Edit</span>
+            </button>
+            <button
+              @click.stop="deleteTag(tag)"
+              class="inline-flex items-center rounded-md bg-red-50 px-2.5 py-1.5 text-sm font-semibold text-red-700 shadow-sm ring-1 ring-inset ring-red-600/20 hover:bg-red-100"
+            >
+              <TrashIcon class="h-4 w-4" />
+              <span class="sr-only">Delete</span>
+            </button>
           </div>
         </div>
-      </div>
 
-      <!-- Tags Grid -->
-      <div class="mt-8">
-        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <div
-            v-for="tag in filteredTags"
-            :key="tag.id"
-            class="relative flex items-center space-x-3 rounded-lg border border-gray-300 bg-white px-6 py-5 shadow-sm hover:border-gray-400"
-          >
-            <div class="flex-shrink-0">
-              <div
-                class="h-8 w-8 rounded-full"
-                :style="{ backgroundColor: tag.color }"
-              ></div>
-            </div>
-            <div class="min-w-0 flex-1">
-              <span class="absolute inset-0" aria-hidden="true" />
-              <p class="text-sm font-medium text-gray-900">{{ tag.name }}</p>
-              <p class="truncate text-sm text-gray-500">
-                {{ tag.time_entries?.length || 0 }} time entries
-              </p>
-            </div>
-            <div class="flex-shrink-0 space-x-2">
+        <!-- Empty State -->
+        <div v-if="filteredTags.length === 0" class="sm:col-span-2 lg:col-span-3">
+          <div class="relative block w-full rounded-lg border-2 border-dashed border-gray-300 p-12 text-center">
+            <TagIcon class="mx-auto h-12 w-12 text-gray-400" />
+            <h3 class="mt-2 text-sm font-semibold text-gray-900">No tags</h3>
+            <p class="mt-1 text-sm text-gray-500">
+              {{ tags.length === 0 ? 'Get started by creating a new tag.' : 'No tags match your search.' }}
+            </p>
+            <div class="mt-6" v-if="tags.length === 0">
               <button
-                @click.stop="editTag(tag)"
-                class="inline-flex items-center rounded-md bg-white px-2.5 py-1.5 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
+                @click="openCreateModal"
+                class="inline-flex items-center rounded-md bg-primary-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary-700"
               >
-                <PencilSquareIcon class="h-4 w-4" />
-                <span class="sr-only">Edit</span>
+                <PlusIcon class="h-5 w-5 mr-1.5" />
+                New Tag
               </button>
-              <button
-                @click.stop="deleteTag(tag)"
-                class="inline-flex items-center rounded-md bg-red-50 px-2.5 py-1.5 text-sm font-semibold text-red-700 shadow-sm ring-1 ring-inset ring-red-600/20 hover:bg-red-100"
-              >
-                <TrashIcon class="h-4 w-4" />
-                <span class="sr-only">Delete</span>
-              </button>
-            </div>
-          </div>
-
-          <!-- Empty State -->
-          <div v-if="filteredTags.length === 0" class="sm:col-span-2 lg:col-span-3">
-            <div class="relative block w-full rounded-lg border-2 border-dashed border-gray-300 p-12 text-center">
-              <TagIcon class="mx-auto h-12 w-12 text-gray-400" />
-              <h3 class="mt-2 text-sm font-semibold text-gray-900">No tags</h3>
-              <p class="mt-1 text-sm text-gray-500">
-                {{ tags.length === 0 ? 'Get started by creating a new tag.' : 'No tags match your search.' }}
-              </p>
-              <div class="mt-6" v-if="tags.length === 0">
-                <button
-                  @click="openCreateModal"
-                  class="inline-flex items-center rounded-md bg-primary-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary-700"
-                >
-                  <PlusIcon class="h-5 w-5 mr-1.5" />
-                  New Tag
-                </button>
-              </div>
             </div>
           </div>
         </div>
@@ -187,13 +185,12 @@
         </div>
       </Dialog>
     </TransitionRoot>
-  </AppLayout>
+  </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { Head } from '@inertiajs/vue3'
-import AppLayout from '@/Layouts/AppLayout.vue'
 import {
   Dialog,
   DialogPanel,

@@ -1,12 +1,12 @@
 <template>
-    <Head title="Timer" />
-    <AppLayout>
+    <div>
+        <Head title="Timer" />
         <TimeTracker class="w-full" />
-    </AppLayout>
+    </div>
 </template>
 
 <script setup>
-import { Head } from '@inertiajs/vue3'
+import { Head, Link } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
 import TimeTracker from '@/Pages/TimeTracker.vue'
 </script> 

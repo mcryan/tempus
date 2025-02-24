@@ -1,8 +1,8 @@
 <template>
-  <div class="min-h-screen w-full">
+  <div class="w-full">
     <div class="w-full py-4">
       <!-- Timer Input -->
-      <div class="bg-white rounded-lg shadow mb-4">
+      <div class="bg-white rounded-lg shadow-md mb-6">
         <div class="p-4">
           <div class="flex items-center">
             <div class="flex-1 flex items-center">
@@ -10,7 +10,7 @@
                 <input
                   type="text"
                   v-model="newDescription"
-                  class="flex-1 min-w-0 border-0 bg-transparent text-base font-medium text-gray-900 placeholder-gray-400 focus:ring-0"
+                  class="flex-1 min-w-0 border-0 bg-transparent text-lg font-medium text-gray-900 placeholder-gray-400 focus:ring-0"
                   placeholder="What are you working on?"
                   @keyup.enter="startTimer"
                 />
@@ -60,7 +60,7 @@
         </div>
         
         <!-- Week Navigation -->
-        <div class="flex space-x-2">
+        <div class="flex items-center space-x-2">
           <button
             @click="previousWeek"
             class="p-1.5 rounded-full text-gray-400 hover:text-gray-600"
@@ -68,7 +68,10 @@
           >
             <ChevronLeftIcon class="h-5 w-5" />
           </button>
-          <span class="text-sm font-medium text-gray-700 flex items-center px-2" v-if="view === 'calendar'">
+          <span 
+            class="text-sm font-medium text-gray-700 flex items-center px-2 min-w-[150px] justify-center" 
+            v-if="view === 'calendar'"
+          >
             {{ formatWeekRange }}
           </span>
           <button
@@ -371,7 +374,7 @@
               <div class="absolute w-full border-t border-gray-50" style="top: 50%"></div>
               <div class="absolute w-full border-t border-gray-50" style="top: 75%"></div>
             </div>
-            
+
             <!-- Time entries -->
             <div
               v-for="entry in getEntriesForDay(day.date)"
@@ -517,8 +520,8 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import axios from 'axios'
+import { Link } from '@inertiajs/vue3'
 import ProjectSelector from '@/Components/ProjectSelector.vue'
-import AppLayout from '@/Layouts/AppLayout.vue'
 import { 
   PlayIcon, 
   StopIcon, 
@@ -537,11 +540,6 @@ import {
   ListBulletIcon,
   CalendarIcon,
 } from '@heroicons/vue/24/outline'
-
-// Define the layout property
-defineOptions({
-  layout: AppLayout
-})
 
 const currentEntry = ref(null)
 const recentEntries = ref([])
