@@ -362,6 +362,23 @@
             @dragover="handleDragOver"
             @drop="handleDrop($event, day.date)"
           >
+            <!-- Current time indicator -->
+            <div 
+              v-if="isToday(day.date)"
+              class="absolute left-0 right-0 z-10 pointer-events-none"
+              :style="{
+                top: `${(currentTimePercentage)}%`,
+                transform: 'translateY(-50%)'
+              }"
+            >
+              <div class="flex items-center w-full">
+                <div class="absolute -top-5 left-2 text-xs text-primary-600 font-medium">
+                  {{ formatTime(new Date()) }}
+                </div>
+                <div class="flex-1 border-t-2 border-primary-500"></div>
+              </div>
+            </div>
+
             <!-- Hour grid lines -->
             <div
               v-for="hour in 24"
@@ -380,20 +397,23 @@
               v-for="entry in getEntriesForDay(day.date)"
               :key="entry.id"
               :data-entry-id="entry.id"
-              class="absolute left-2 right-2 px-2 py-1.5 text-xs cursor-pointer overflow-hidden transition-opacity duration-150 group flex flex-col h-full"
+              class="absolute left-2 right-2 px-2 py-1.5 text-xs overflow-hidden transition-opacity duration-150 group flex flex-col h-full"
               :style="resizingEntry?.id === entry.id ? getResizeStyle(entry, day.date) : getEntryStyle(entry, day.date)"
               :class="[
+                currentEntry?.id === entry.id ? 'cursor-default' : 'cursor-pointer',
                 getEntryColorClass(entry),
                 { 'opacity-50': draggedEntry?.id === entry.id }
               ]"
+              :title="currentEntry?.id === entry.id ? 'Stop the timer to edit this entry' : ''"
               @click.stop="toggleTimeEdit(entry, $event)"
-              draggable="true"
+              :draggable="currentEntry?.id !== entry.id"
               @dragstart="handleDragStart($event, entry)"
               @dragend="handleDragEnd"
             >
               <!-- Top resize handle -->
               <div 
                 class="absolute -top-1 left-0 right-0 h-2 cursor-ns-resize opacity-0 group-hover:opacity-100 bg-black/10 hover:bg-black/20"
+                v-if="currentEntry?.id !== entry.id"
                 @mousedown.prevent="startResize($event, entry, 'top')"
                 @dragstart.prevent
               ></div>
@@ -427,6 +447,7 @@
               <!-- Bottom resize handle -->
               <div 
                 class="absolute -bottom-1 left-0 right-0 h-2 cursor-ns-resize opacity-0 group-hover:opacity-100 bg-black/10 hover:bg-black/20"
+                v-if="currentEntry?.id !== entry.id"
                 @mousedown.prevent="startResize($event, entry, 'bottom')"
                 @dragstart.prevent
               ></div>
@@ -556,6 +577,7 @@ const todayTotal = ref(0)
 const weekTotal = ref(0)
 const currentWeekStart = ref(localStorage.getItem('timeTrackerWeek') || getWeekStart(new Date()))
 let timer = null
+const currentTimePercentage = ref(0)
 
 // Watch for view changes and save to localStorage
 watch(view, (newView) => {
@@ -1135,6 +1157,8 @@ onMounted(() => {
   
   // Add click outside handlers
   document.addEventListener('click', handleClickOutside)
+  updateCurrentTimeIndicator()
+  setInterval(updateCurrentTimeIndicator, 60000) // Update every minute
 })
 
 onUnmounted(() => {
@@ -1167,6 +1191,11 @@ const timeEditDuration = ref('')
 
 // Replace openTimeEditModal with this simpler toggle function
 function toggleTimeEdit(entry, event) {
+  // First check if this is the current running timer
+  if (currentEntry.value?.id === entry.id) {
+    return // Exit immediately if it's the running timer
+  }
+
   if (justFinishedResize.value) return
 
   if (timeEditEntry.value?.id === entry.id) {
@@ -1312,7 +1341,7 @@ function isToday(dateString) {
 }
 
 function getEntriesForDay(dateString) {
-  return recentEntries.value.filter(entry => {
+  const entries = recentEntries.value.filter(entry => {
     // Create dates at start of day in local timezone
     const dayStart = new Date(dateString + 'T00:00:00')
     const dayEnd = new Date(dateString + 'T23:59:59')
@@ -1327,14 +1356,33 @@ function getEntriesForDay(dateString) {
     
     return startsBeforeEnd && endsAfterStart
   })
+
+  // Add current running entry if it exists and belongs to this day
+  if (currentEntry.value) {
+    const entryStart = new Date(currentEntry.value.start_time)
+    const dayStart = new Date(dateString + 'T00:00:00')
+    const dayEnd = new Date(dateString + 'T23:59:59')
+    
+    if (entryStart >= dayStart && entryStart <= dayEnd) {
+      entries.push({
+        ...currentEntry.value,
+        end_time: new Date().toISOString()
+      })
+    }
+  }
+
+  return entries
 }
 
 function getEntryStyle(entry, date) {
-  const startTime = new Date(entry.start_time)
-  const endTime = new Date(entry.end_time)
   const dayStart = new Date(date + 'T00:00:00')
   const dayEnd = new Date(date + 'T23:59:59')
   
+  const startTime = new Date(entry.start_time)
+  const endTime = currentEntry.value?.id === entry.id 
+    ? new Date() 
+    : new Date(entry.end_time)
+
   // Calculate start percent based on whether the entry starts on this day
   const startPercent = startTime < dayStart 
     ? 0 
@@ -1456,6 +1504,10 @@ const justFinishedResize = ref(false)
 
 // Add these new functions
 function handleDragStart(event, entry) {
+  if (currentEntry?.id === entry.id) {
+    event.preventDefault()
+    return
+  }
   draggedEntry.value = entry
   const rect = event.target.getBoundingClientRect()
   dragStartOffset.value = event.clientY - rect.top
@@ -1570,6 +1622,9 @@ async function handleDrop(event, date) {
 }
 
 function startResize(event, entry, edge) {
+  if (currentEntry?.id === entry.id) {
+    return
+  }
   event.stopPropagation()
   resizingEntry.value = entry
   resizeEdge.value = edge
@@ -1695,5 +1750,12 @@ function getDurationForEntry(entry) {
     return Math.round((end - start) / 1000)
   }
   return entry.duration
+}
+
+function updateCurrentTimeIndicator() {
+  const now = new Date()
+  const hours = now.getHours()
+  const minutes = now.getMinutes()
+  currentTimePercentage.value = ((hours + minutes / 60) / 24 * 100)
 }
 </script> 
