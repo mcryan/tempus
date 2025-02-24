@@ -1,7 +1,7 @@
 <template>
     <Head title="Timer" />
     <AppLayout>
-        <TimeTracker />
+        <TimeTracker class="w-full" />
     </AppLayout>
 </template>
 

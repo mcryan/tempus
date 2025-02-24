@@ -1,8 +1,8 @@
 <template>
-  <div class="min-h-screen bg-gray-50">
-    <div class="max-w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+  <div class="min-h-screen w-full">
+    <div class="w-full py-4">
       <!-- Timer Input -->
-      <div class="bg-white rounded-lg shadow mb-6">
+      <div class="bg-white rounded-lg shadow mb-4">
         <div class="p-4">
           <div class="flex items-center">
             <div class="flex-1 flex items-center">
@@ -10,7 +10,7 @@
                 <input
                   type="text"
                   v-model="newDescription"
-                  class="flex-1 min-w-0 border-0 bg-transparent text-lg font-medium text-gray-900 placeholder-gray-400 focus:ring-0"
+                  class="flex-1 min-w-0 border-0 bg-transparent text-base font-medium text-gray-900 placeholder-gray-400 focus:ring-0"
                   placeholder="What are you working on?"
                   @keyup.enter="startTimer"
                 />
@@ -38,6 +38,49 @@
         </div>
       </div>
 
+      <!-- Add this right after the Timer Input section and before the views -->
+      <div class="mb-4 flex justify-between items-center">
+        <div class="flex space-x-2">
+          <button
+            @click="view = 'list'"
+            class="px-2.5 py-1.5 rounded-md text-sm font-medium"
+            :class="view === 'list' ? 'bg-primary-100 text-primary-700' : 'text-gray-500 hover:text-gray-700'"
+          >
+            <ListBulletIcon class="h-5 w-5 inline-block mr-1" />
+            List
+          </button>
+          <button
+            @click="view = 'calendar'"
+            class="px-2.5 py-1.5 rounded-md text-sm font-medium"
+            :class="view === 'calendar' ? 'bg-primary-100 text-primary-700' : 'text-gray-500 hover:text-gray-700'"
+          >
+            <CalendarIcon class="h-5 w-5 inline-block mr-1" />
+            Calendar
+          </button>
+        </div>
+        
+        <!-- Week Navigation -->
+        <div class="flex space-x-2">
+          <button
+            @click="previousWeek"
+            class="p-1.5 rounded-full text-gray-400 hover:text-gray-600"
+            v-if="view === 'calendar'"
+          >
+            <ChevronLeftIcon class="h-5 w-5" />
+          </button>
+          <span class="text-sm font-medium text-gray-700 flex items-center px-2" v-if="view === 'calendar'">
+            {{ formatWeekRange }}
+          </span>
+          <button
+            @click="nextWeek"
+            class="p-1.5 rounded-full text-gray-400 hover:text-gray-600"
+            v-if="view === 'calendar'"
+          >
+            <ChevronRightIcon class="h-5 w-5" />
+          </button>
+        </div>
+      </div>
+
       <!-- Time Entries -->
       <div v-if="view === 'list'" class="space-y-6">
         <div v-for="(group, date) in groupedEntries" :key="date">
@@ -46,6 +89,7 @@
             <div
               v-for="entry in group"
               :key="entry.id"
+              :data-entry-id="entry.id"
               class="group p-4 flex items-center hover:bg-gray-50 transition-colors duration-150"
             >
               <!-- Description and Project -->
@@ -155,17 +199,18 @@
                 <!-- Time Editor -->
                 <div class="relative">
                   <button
-                    @click.stop="toggleTimeEdit(entry)"
+                    @click.stop="toggleTimeEdit(entry, $event)"
                     class="inline-flex items-center space-x-2 px-2 py-1 text-sm text-gray-600 hover:text-gray-900"
                   >
-                    <span>{{ formatTime(entry.start_time) }} - {{ formatTime(entry.end_time) }}</span>
+                    <span>{{ formatTime(draggedEntry?.id === entry.id && dragPreviewTimes ? dragPreviewTimes.start : entry.start_time) }} - {{ formatTime(draggedEntry?.id === entry.id && dragPreviewTimes ? dragPreviewTimes.end : entry.end_time) }}</span>
                     <span class="font-mono">{{ formatDuration(entry.duration) }}</span>
                   </button>
 
                   <!-- Time Edit Dropdown -->
                   <div
                     v-if="timeEditEntry?.id === entry.id"
-                    class="absolute z-10 mt-1 w-80 rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5"
+                    class="absolute z-[100] w-80 rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 time-edit-dropdown overflow-visible"
+                    :style="getTimeEditPosition($event)"
                     @click.stop
                   >
                     <div class="p-4 space-y-3">
@@ -263,16 +308,214 @@
         </div>
       </div>
 
-      <!-- Calendar View (placeholder) -->
-      <div v-else class="bg-white rounded-lg shadow p-6">
-        <p class="text-center text-gray-500">Calendar view coming soon</p>
+      <!-- Replace the existing calendar view placeholder with this -->
+      <div v-if="view === 'calendar'" class="bg-white rounded-lg shadow">
+        <!-- Calendar Header -->
+        <div class="grid grid-cols-7 border-b">
+          <div
+            v-for="day in weekDays"
+            :key="day.date"
+            class="px-2 py-3 text-center border-r last:border-r-0"
+          >
+            <div class="text-xs font-medium text-gray-500">
+              {{ formatWeekDay(day.date) }}
+            </div>
+            <div class="text-sm font-semibold" :class="isToday(day.date) ? 'text-primary-600' : 'text-gray-900'">
+              {{ formatDayNumber(day.date) }}
+            </div>
+          </div>
+        </div>
+        
+        <!-- Calendar Grid -->
+        <div 
+          class="grid grid-cols-7 relative"
+          :style="{
+            height: 'calc(90vh - 8rem)',
+            minHeight: '800px',
+            paddingBottom: '4rem'
+          }"
+        >
+          <!-- Time indicators -->
+          <div 
+            class="absolute left-0 top-0 h-[calc(100%-4rem)] w-16 border-r text-xs z-50 bg-white select-none"
+          >
+            <div
+              v-for="hour in 25"
+              :key="hour"
+              class="absolute w-full flex items-center justify-end pr-2 text-gray-500 -translate-y-1/2"
+              :style="{ top: `${((hour - 1) / 24 * 100)}%` }"
+            >
+              {{ formatHour(hour <= 24 ? hour - 1 : 24) }}
+            </div>
+          </div>
+          
+          <!-- Day columns -->
+          <div
+            v-for="day in weekDays"
+            :key="day.date"
+            :data-date="day.date"
+            class="relative border-r last:border-r-0 transition-colors duration-150 pt-[1px]"
+            :class="{ 'bg-gray-50': draggedEntry }"
+            @dragover="handleDragOver"
+            @drop="handleDrop($event, day.date)"
+          >
+            <!-- Hour grid lines -->
+            <div
+              v-for="hour in 24"
+              :key="hour"
+              class="absolute w-full border-t border-gray-100"
+              :style="{ top: `${((hour - 1) / 24 * 100)}%`, height: '1px' }"
+            >
+              <!-- 15-minute interval guides -->
+              <div class="absolute w-full border-t border-gray-50" style="top: 25%"></div>
+              <div class="absolute w-full border-t border-gray-50" style="top: 50%"></div>
+              <div class="absolute w-full border-t border-gray-50" style="top: 75%"></div>
+            </div>
+            
+            <!-- Time entries -->
+            <div
+              v-for="entry in getEntriesForDay(day.date)"
+              :key="entry.id"
+              :data-entry-id="entry.id"
+              class="absolute left-2 right-2 px-2 py-1.5 text-xs cursor-pointer overflow-hidden transition-opacity duration-150 group flex flex-col h-full"
+              :style="resizingEntry?.id === entry.id ? getResizeStyle(entry, day.date) : getEntryStyle(entry, day.date)"
+              :class="[
+                getEntryColorClass(entry),
+                { 'opacity-50': draggedEntry?.id === entry.id }
+              ]"
+              @click.stop="toggleTimeEdit(entry, $event)"
+              draggable="true"
+              @dragstart="handleDragStart($event, entry)"
+              @dragend="handleDragEnd"
+            >
+              <!-- Top resize handle -->
+              <div 
+                class="absolute -top-1 left-0 right-0 h-2 cursor-ns-resize opacity-0 group-hover:opacity-100 bg-black/10 hover:bg-black/20"
+                @mousedown.prevent="startResize($event, entry, 'top')"
+                @dragstart.prevent
+              ></div>
+              
+              <!-- Description -->
+              <div class="font-medium truncate">
+                <span 
+                  v-if="entry.project?.color" 
+                  class="inline-block w-2 h-2 rounded-full mr-1"
+                  :style="{ backgroundColor: entry.project.color }"
+                ></span>
+                {{ entry.description || 'No description' }}
+              </div>
+              
+              <!-- Project name -->
+              <div class="text-xs opacity-75 truncate" :style="{ color: entry.project?.color || 'currentColor' }">
+                {{ entry.project?.name || '' }}
+              </div>
+              
+              <!-- Times -->
+              <div class="text-xs opacity-75 mt-0.5">
+                {{ formatTime((draggedEntry?.id === entry.id || resizingEntry?.id === entry.id) && dragPreviewTimes ? dragPreviewTimes.start : entry.start_time) }} - 
+                {{ formatTime((draggedEntry?.id === entry.id || resizingEntry?.id === entry.id) && dragPreviewTimes ? dragPreviewTimes.end : entry.end_time) }}
+              </div>
+              
+              <!-- Duration at bottom -->
+              <div class="text-xs opacity-75 font-mono mt-auto">
+                {{ formatDuration(getDurationForEntry(entry)) }}
+              </div>
+              
+              <!-- Bottom resize handle -->
+              <div 
+                class="absolute -bottom-1 left-0 right-0 h-2 cursor-ns-resize opacity-0 group-hover:opacity-100 bg-black/10 hover:bg-black/20"
+                @mousedown.prevent="startResize($event, entry, 'bottom')"
+                @dragstart.prevent
+              ></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Global Time Edit Dropdown -->
+    <div
+      v-if="timeEditEntry"
+      class="fixed z-[100] w-80 rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 time-edit-dropdown overflow-visible"
+      :style="getTimeEditPosition($event)"
+      @click.stop
+    >
+      <div class="p-4 space-y-3">
+        <!-- Date Picker -->
+        <div class="flex items-center justify-between">
+          <button
+            @click="changeDate(-1)"
+            class="p-1 hover:bg-gray-100 rounded-full"
+          >
+            <ChevronLeftIcon class="h-4 w-4" />
+          </button>
+          <span class="text-sm font-medium">
+            {{ formatMonthDay(timeEditDate) }}
+          </span>
+          <button
+            @click="changeDate(1)"
+            class="p-1 hover:bg-gray-100 rounded-full"
+          >
+            <ChevronRightIcon class="h-4 w-4" />
+          </button>
+        </div>
+
+        <!-- Time Inputs -->
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-medium text-gray-700 mb-1">Start</label>
+            <input
+              type="time"
+              v-model="timeEditStartTime"
+              class="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
+              @input="updateDurationFromTimes"
+            />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-700 mb-1">End</label>
+            <input
+              type="time"
+              v-model="timeEditEndTime"
+              class="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
+              @input="updateDurationFromTimes"
+            />
+          </div>
+        </div>
+
+        <!-- Duration Input -->
+        <div>
+          <label class="block text-xs font-medium text-gray-700 mb-1">Duration</label>
+          <input
+            type="text"
+            v-model="timeEditDuration"
+            class="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm font-mono"
+            placeholder="00:00:00"
+            @input="updateTimesFromDuration"
+          />
+        </div>
+
+        <!-- Actions -->
+        <div class="flex justify-end space-x-2 pt-2">
+          <button
+            @click="closeTimeEdit"
+            class="px-2 py-1 text-sm text-gray-600 hover:text-gray-900"
+          >
+            Cancel
+          </button>
+          <button
+            @click="saveTimeEdit"
+            class="px-2 py-1 text-sm bg-primary-50 text-primary-600 rounded hover:bg-primary-100"
+          >
+            Save
+          </button>
+        </div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import axios from 'axios'
 import ProjectSelector from '@/Components/ProjectSelector.vue'
 import AppLayout from '@/Layouts/AppLayout.vue'
@@ -291,6 +534,8 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   CurrencyDollarIcon,
+  ListBulletIcon,
+  CalendarIcon,
 } from '@heroicons/vue/24/outline'
 
 // Define the layout property
@@ -308,10 +553,24 @@ const availableTags = ref([])
 const showNewTagForm = ref(false)
 const newTagName = ref('')
 const newTagColor = ref('#ff0000')
-const view = ref('list')
+const view = ref(localStorage.getItem('timeTrackerView') || 'list')
 const todayTotal = ref(0)
 const weekTotal = ref(0)
+const currentWeekStart = ref(localStorage.getItem('timeTrackerWeek') || getWeekStart(new Date()))
 let timer = null
+
+// Watch for view changes and save to localStorage
+watch(view, (newView) => {
+  localStorage.setItem('timeTrackerView', newView)
+})
+
+// Also add currentWeekStart to localStorage
+// const currentWeekStart = ref(getWeekStart(new Date()))
+
+// Watch for week changes and save to localStorage
+watch(currentWeekStart, (newWeek) => {
+  localStorage.setItem('timeTrackerWeek', newWeek)
+})
 
 const groupedEntries = computed(() => {
   const groups = {}
@@ -323,6 +582,34 @@ const groupedEntries = computed(() => {
     groups[date].push(entry)
   })
   return groups
+})
+
+const weekDays = computed(() => {
+  const days = []
+  const start = new Date(currentWeekStart.value)
+  
+  for (let i = 0; i < 7; i++) {
+    const date = new Date(start)
+    date.setDate(date.getDate() + i)
+    days.push({ date: date.toISOString().split('T')[0] })
+  }
+  
+  return days
+})
+
+const formatWeekRange = computed(() => {
+  const start = new Date(currentWeekStart.value)
+  const end = new Date(start)
+  end.setDate(end.getDate() + 6)
+  
+  const startMonth = start.toLocaleString('default', { month: 'short' })
+  const endMonth = end.toLocaleString('default', { month: 'short' })
+  
+  if (startMonth === endMonth) {
+    return `${startMonth} ${start.getDate()} - ${end.getDate()}, ${start.getFullYear()}`
+  }
+  
+  return `${startMonth} ${start.getDate()} - ${endMonth} ${end.getDate()}, ${start.getFullYear()}`
 })
 
 // Load current timer and recent entries
@@ -849,12 +1136,7 @@ onMounted(() => {
   loadTags()
   
   // Add click outside handlers
-  document.addEventListener('click', (e) => {
-    if (!e.target.closest('.relative')) {
-      closeTagDropdown()
-      closeTimeEdit()
-    }
-  })
+  document.addEventListener('click', handleClickOutside)
 })
 
 onUnmounted(() => {
@@ -862,9 +1144,15 @@ onUnmounted(() => {
     clearInterval(timer)
   }
   // Remove click outside handlers
-  document.removeEventListener('click', closeTagDropdown)
-  document.removeEventListener('click', closeTimeEdit)
+  document.removeEventListener('click', handleClickOutside)
 })
+
+function handleClickOutside(event) {
+  const timeEditElement = document.querySelector('.time-edit-dropdown')
+  if (timeEditElement && !timeEditElement.contains(event.target)) {
+    closeTimeEdit()
+  }
+}
 
 // Add the close function
 function closeTagDropdown() {
@@ -880,7 +1168,9 @@ const timeEditEndTime = ref('')
 const timeEditDuration = ref('')
 
 // Replace openTimeEditModal with this simpler toggle function
-function toggleTimeEdit(entry) {
+function toggleTimeEdit(entry, event) {
+  if (justFinishedResize.value) return
+
   if (timeEditEntry.value?.id === entry.id) {
     closeTimeEdit()
     return
@@ -981,5 +1271,431 @@ function updateTimesFromDuration() {
   
   const endDate = new Date(startDate.getTime() + (durationInSeconds * 1000))
   timeEditEndTime.value = endDate.toTimeString().slice(0, 5)
+}
+
+// Keep these calendar-related functions
+function getWeekStart(date) {
+  const d = new Date(date)
+  d.setHours(0, 0, 0, 0)
+  const day = d.getDay()
+  d.setDate(d.getDate() - day)
+  return d.toISOString().split('T')[0]
+}
+
+function nextWeek() {
+  const date = new Date(currentWeekStart.value)
+  date.setDate(date.getDate() + 7)
+  currentWeekStart.value = date.toISOString().split('T')[0]
+}
+
+function previousWeek() {
+  const date = new Date(currentWeekStart.value)
+  date.setDate(date.getDate() - 7)
+  currentWeekStart.value = date.toISOString().split('T')[0]
+}
+
+function formatWeekDay(dateString) {
+  return new Date(dateString).toLocaleDateString('default', { weekday: 'short' })
+}
+
+function formatDayNumber(dateString) {
+  return new Date(dateString).getDate()
+}
+
+function formatHour(hour) {
+  if (hour < 0) return '00:00'
+  if (hour === 24) return '24:00'
+  return `${hour.toString().padStart(2, '0')}:00`
+}
+
+function isToday(dateString) {
+  const today = new Date().toISOString().split('T')[0]
+  return dateString === today
+}
+
+function getEntriesForDay(dateString) {
+  return recentEntries.value.filter(entry => {
+    // Create dates at start of day in local timezone
+    const dayStart = new Date(dateString + 'T00:00:00')
+    const dayEnd = new Date(dateString + 'T23:59:59')
+    
+    // Parse entry times and ensure they're in the same timezone
+    const entryStart = new Date(entry.start_time)
+    const entryEnd = new Date(entry.end_time)
+    
+    // Check if any part of the entry falls within this day
+    const startsBeforeEnd = entryStart <= dayEnd
+    const endsAfterStart = entryEnd >= dayStart
+    
+    return startsBeforeEnd && endsAfterStart
+  })
+}
+
+function getEntryStyle(entry, date) {
+  const startTime = new Date(entry.start_time)
+  const endTime = new Date(entry.end_time)
+  const dayStart = new Date(date + 'T00:00:00')
+  const dayEnd = new Date(date + 'T23:59:59')
+  
+  // Calculate start percent based on whether the entry starts on this day
+  const startPercent = startTime < dayStart 
+    ? 0 
+    : ((startTime.getHours() + startTime.getMinutes() / 60) / 24 * 100)
+  
+  // Calculate end percent based on whether the entry ends on this day
+  const endPercent = endTime > dayEnd
+    ? 100  // Fill to end of day
+    : ((endTime.getHours() + endTime.getMinutes() / 60) / 24 * 100)
+  
+  const heightPercent = endPercent - startPercent
+  
+  // Get the project color or default to gray
+  const color = entry.project?.color || '#E5E7EB'
+  
+  // Convert hex to RGB for transparency
+  const rgb = hexToRgb(color)
+  
+  return {
+    top: `${startPercent}%`,
+    height: `${heightPercent}%`,
+    backgroundColor: `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.15)`,
+    borderColor: color,
+  }
+}
+
+function getEntryColorClass(entry) {
+  // Default colors for entries without a project
+  if (!entry.project?.color) {
+    return 'bg-gray-100 text-gray-700 border border-gray-200'
+  }
+  
+  // Return dynamic classes based on project color
+  return {
+    'border rounded shadow-sm': true,
+    [`hover:shadow-md transition-shadow duration-150`]: true,
+    'text-gray-900': true,
+  }
+}
+
+function editEntry(entry, event) {
+  toggleTimeEdit(entry, event)
+}
+
+// Helper function to convert hex color to RGB
+function hexToRgb(hex) {
+  // Remove # if present
+  hex = hex.replace('#', '')
+  
+  // Convert 3-digit hex to 6-digits
+  if (hex.length === 3) {
+    hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2]
+  }
+  
+  // Convert hex to RGB
+  const r = parseInt(hex.substring(0, 2), 16)
+  const g = parseInt(hex.substring(2, 4), 16)
+  const b = parseInt(hex.substring(4, 6), 16)
+  
+  return { r, g, b }
+}
+
+function getTimeEditPosition(event) {
+  // Get the parent element's position
+  const element = document.querySelector(`[data-entry-id="${timeEditEntry.value.id}"]`)
+  if (!element) return {}
+  const rect = element.getBoundingClientRect()
+  
+  const viewportHeight = window.innerHeight
+  const viewportWidth = window.innerWidth
+  const dropdownHeight = 400
+  const dropdownWidth = 320
+  const padding = 8
+  
+  // Position dropdown aligned with the right edge of the time display
+  let left = rect.right - dropdownWidth
+  let top = rect.bottom + 5 // 5px gap
+  
+  // If dropdown would go off the left side of the screen
+  if (left < padding) {
+    left = padding
+  }
+  
+  // If dropdown would go off the right side of the screen
+  if (left + dropdownWidth > viewportWidth - padding) {
+    left = viewportWidth - dropdownWidth - padding
+  }
+  
+  // Check if dropdown would go below viewport
+  if (top + dropdownHeight > viewportHeight - padding) {
+    // Position above the clicked element instead
+    top = rect.top - dropdownHeight - 5
+  }
+  
+  return {
+    position: 'fixed',
+    top: `${top}px`,
+    left: `${left}px`,
+    maxHeight: `${dropdownHeight}px`,
+    maxWidth: `${dropdownWidth}px`
+  }
+}
+
+// Add these refs at the top with other refs
+const draggedEntry = ref(null)
+const dragStartOffset = ref(null)
+
+// Add these refs
+const dragPreviewTimes = ref(null)
+
+// Add these refs for resize functionality
+const resizingEntry = ref(null)
+const resizeEdge = ref(null)
+const resizeStartY = ref(null)
+const originalTimes = ref(null)
+
+// Add this ref with the other refs
+const justFinishedResize = ref(false)
+
+// Add these new functions
+function handleDragStart(event, entry) {
+  draggedEntry.value = entry
+  const rect = event.target.getBoundingClientRect()
+  dragStartOffset.value = event.clientY - rect.top
+  
+  // Add visual feedback
+  event.target.classList.add('opacity-50')
+  
+  // Set required data for drag operation
+  event.dataTransfer.effectAllowed = 'move'
+  
+  // Initialize preview times
+  dragPreviewTimes.value = {
+    start: new Date(entry.start_time),
+    end: new Date(entry.end_time)
+  }
+}
+
+function handleDragEnd(event) {
+  event.target.classList.remove('opacity-50')
+  draggedEntry.value = null
+  dragStartOffset.value = null
+  dragPreviewTimes.value = null
+}
+
+function handleDragOver(event) {
+  event.preventDefault()
+  event.dataTransfer.dropEffect = 'move'
+  
+  if (!draggedEntry.value) return
+  
+  // Calculate preview times
+  const columnRect = event.currentTarget.getBoundingClientRect()
+  const minutesInDay = 24 * 60
+  const pixelsPerMinute = columnRect.height / minutesInDay
+  
+  // Calculate the new start time based on drop position minus the original click offset
+  const dropY = event.clientY - columnRect.top - dragStartOffset.value
+  let startMinutes = Math.floor(dropY / pixelsPerMinute)
+  
+  // Snap to nearest 15-minute interval
+  const interval = 15
+  startMinutes = Math.round(startMinutes / interval) * interval
+  startMinutes = Math.max(0, Math.min(1440, startMinutes))
+  
+  // Update preview times
+  const date = event.currentTarget.dataset.date
+  const previewStart = new Date(date)
+  previewStart.setHours(Math.floor(startMinutes / 60), startMinutes % 60, 0, 0)
+  
+  const durationMinutes = draggedEntry.value.duration / 60
+  const previewEnd = new Date(previewStart)
+  previewEnd.setMinutes(previewEnd.getMinutes() + durationMinutes)
+  
+  dragPreviewTimes.value = {
+    start: previewStart,
+    end: previewEnd
+  }
+}
+
+async function handleDrop(event, date) {
+  event.preventDefault()
+  
+  if (!draggedEntry.value) return
+  
+  // Calculate the time based on the drop position
+  const columnRect = event.currentTarget.getBoundingClientRect()
+  const minutesInDay = 24 * 60
+  const pixelsPerMinute = columnRect.height / minutesInDay
+  
+  // Calculate the new start time based on drop position minus the original click offset
+  const dropY = event.clientY - columnRect.top - dragStartOffset.value
+  let startMinutes = Math.floor(dropY / pixelsPerMinute)
+  
+  // Snap to nearest 15-minute interval
+  const interval = 15
+  startMinutes = Math.round(startMinutes / interval) * interval
+  
+  // Calculate original duration
+  const originalStart = new Date(draggedEntry.value.start_time)
+  const originalEnd = new Date(draggedEntry.value.end_time)
+  const durationMinutes = Math.round((originalEnd - originalStart) / (1000 * 60))
+  
+  // Only limit the start time to be within the day (0-1440 minutes)
+  startMinutes = Math.max(0, Math.min(1440, startMinutes))
+  
+  // Create new start time
+  const startDateTime = new Date(date)
+  const hours = Math.floor(startMinutes / 60)
+  const minutes = startMinutes % 60
+  startDateTime.setHours(hours, minutes, 0, 0)
+  
+  // Calculate new end time maintaining the same duration
+  const endDateTime = new Date(startDateTime)
+  endDateTime.setMinutes(endDateTime.getMinutes() + durationMinutes)
+  
+  // Allow entries to span across midnight
+  // No need to adjust the times as we want to preserve the duration
+  
+  try {
+    await axios.put(`/api/time-entries/${draggedEntry.value.id}`, {
+      description: draggedEntry.value.description,
+      project_id: draggedEntry.value.project_id,
+      start_time: startDateTime.toISOString(),
+      end_time: endDateTime.toISOString(),
+      tags: draggedEntry.value.tags?.map(tag => tag.id) || []
+    })
+    
+    await loadData()
+  } catch (error) {
+    console.error('Failed to update time entry:', error)
+  }
+}
+
+function startResize(event, entry, edge) {
+  event.stopPropagation()
+  resizingEntry.value = entry
+  resizeEdge.value = edge
+  resizeStartY.value = event.clientY
+  originalTimes.value = {
+    start: new Date(entry.start_time),
+    end: new Date(entry.end_time)
+  }
+  
+  document.addEventListener('mousemove', handleResize)
+  document.addEventListener('mouseup', stopResize)
+}
+
+function handleResize(event) {
+  if (!resizingEntry.value || !resizeStartY.value) return
+  
+  const columnElement = event.target.closest('[data-date]')
+  if (!columnElement) return
+  
+  const columnRect = columnElement.getBoundingClientRect()
+  const minutesInDay = 24 * 60
+  const pixelsPerMinute = columnRect.height / minutesInDay
+  
+  const deltaY = event.clientY - resizeStartY.value
+  const deltaMinutes = Math.round(deltaY / pixelsPerMinute / 15) * 15
+  
+  const newTimes = {
+    start: new Date(originalTimes.value.start),
+    end: new Date(originalTimes.value.end)
+  }
+  
+  if (resizeEdge.value === 'top') {
+    const newStart = new Date(originalTimes.value.start)
+    newStart.setMinutes(newStart.getMinutes() + deltaMinutes)
+    if (newStart < newTimes.end) {
+      newTimes.start = newStart
+    }
+  } else {
+    const newEnd = new Date(originalTimes.value.end)
+    newEnd.setMinutes(newEnd.getMinutes() + deltaMinutes)
+    if (newEnd > newTimes.start) {
+      newTimes.end = newEnd
+    }
+  }
+  
+  dragPreviewTimes.value = newTimes
+}
+
+function stopResize() {
+  if (!resizingEntry.value || !dragPreviewTimes.value) return
+  
+  // Save the changes
+  axios.put(`/api/time-entries/${resizingEntry.value.id}`, {
+    description: resizingEntry.value.description,
+    project_id: resizingEntry.value.project_id,
+    start_time: dragPreviewTimes.value.start.toISOString(),
+    end_time: dragPreviewTimes.value.end.toISOString(),
+    tags: resizingEntry.value.tags?.map(tag => tag.id) || []
+  })
+  .then(() => loadData())
+  .catch(error => console.error('Failed to update time entry:', error))
+  
+  // Clean up
+  document.removeEventListener('mousemove', handleResize)
+  document.removeEventListener('mouseup', stopResize)
+  
+  // Set the flag and clear it after a short delay
+  justFinishedResize.value = true
+  setTimeout(() => {
+    justFinishedResize.value = false
+  }, 100)
+  
+  resizingEntry.value = null
+  resizeEdge.value = null
+  resizeStartY.value = null
+  originalTimes.value = null
+  dragPreviewTimes.value = null
+}
+
+// Clean up event listeners on component unmount
+onUnmounted(() => {
+  document.removeEventListener('mousemove', handleResize)
+  document.removeEventListener('mouseup', stopResize)
+})
+
+function getResizeStyle(entry, date) {
+  const dayStart = new Date(date + 'T00:00:00')
+  const dayEnd = new Date(date + 'T23:59:59')
+  
+  // Use preview times if available, otherwise use original times
+  const startTime = dragPreviewTimes.value ? dragPreviewTimes.value.start : new Date(entry.start_time)
+  const endTime = dragPreviewTimes.value ? dragPreviewTimes.value.end : new Date(entry.end_time)
+  
+  // Calculate start percent based on whether the entry starts on this day
+  const startPercent = startTime < dayStart 
+    ? 0 
+    : ((startTime.getHours() + startTime.getMinutes() / 60) / 24 * 100)
+  
+  // Calculate end percent based on whether the entry ends on this day
+  const endPercent = endTime > dayEnd
+    ? 100  // Fill to end of day
+    : ((endTime.getHours() + endTime.getMinutes() / 60) / 24 * 100)
+  
+  const heightPercent = endPercent - startPercent
+  
+  // Get the project color or default to gray
+  const color = entry.project?.color || '#E5E7EB'
+  const rgb = hexToRgb(color)
+  
+  return {
+    top: `${startPercent}%`,
+    height: `${heightPercent}%`,
+    backgroundColor: `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.15)`,
+    borderColor: color,
+  }
+}
+
+function getDurationForEntry(entry) {
+  if (resizingEntry?.value?.id === entry.id && dragPreviewTimes.value) {
+    // Calculate duration from preview times during resize
+    const start = new Date(dragPreviewTimes.value.start)
+    const end = new Date(dragPreviewTimes.value.end)
+    return Math.round((end - start) / 1000)
+  }
+  return entry.duration
 }
 </script> 
